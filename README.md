@@ -3,6 +3,63 @@
 Welcome! This guide is written for complete beginners.
 By the end of this journey, you will understand how to build your own AI agents from scratch.
 
+The finished project is **Nimbus HR Agent**: a multi-agent HR assistant for a fictional
+company. It answers policy questions from an employee handbook (RAG), checks and books
+vacation days (tools), remembers you (memory), asks before changing data (human approval),
+and runs as a web app (FastAPI + a chat page).
+
+> ⚠️ This is a learning project, not production software. It has no login, uses a fake
+> in-memory HR database, and runs on a small local model that makes mistakes.
+
+---
+
+## Quick Start
+
+**You need:** Python 3.10+ (tested on 3.12), [Ollama](https://ollama.com), and a free
+[Gemini API key](https://aistudio.google.com/apikey).
+
+```bash
+# 1. Get the code
+git clone https://github.com/udayakh/nimbus-hr-agent.git
+cd nimbus-hr-agent
+
+# 2. Create a virtual environment and install the packages
+python -m venv venv
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # macOS / Linux
+pip install -r requirements.txt
+
+# 3. Add your settings: copy the example, then put your Gemini key in .env
+copy .env.example .env         # Windows
+# cp .env.example .env         # macOS / Linux
+
+# 4. Download the local model (about 2 GB)
+ollama pull llama3.2:3b
+
+# 5. Build the handbook search index (one time; uses the Gemini key)
+python stage3/ingest.py
+
+# 6. Start the app, then open http://127.0.0.1:8000 in your browser
+python stage6/api.py
+```
+
+Interactive API docs are at http://127.0.0.1:8000/docs. Press `Ctrl+C` to stop the server.
+
+### Running individual lessons
+
+Every lesson is a standalone script. Run them from the project root, for example:
+
+| Stage | Try this | What it shows |
+|---|---|---|
+| 1 | `python stage1/hello_llm.py` | First LLM call, tokens and cost |
+| 2 | `python stage2/chat.py` | Interactive chat with history |
+| 3 | `python stage3/rag.py --chat` | Chat with the handbook (run `ingest.py` first) |
+| 4 | `python stage4/calculator.py` | Why LLMs need tools for maths |
+| 5 | `python stage5/router.py` | A workflow that routes customer emails |
+| 6 | `python stage6/long_term_agent.py --chat` | Agent that remembers you between sessions |
+
+See [progress.md](progress.md) for what each lesson covers and what we learned from it.
+
 ---
 
 ## Table of Contents
@@ -235,36 +292,23 @@ We will build your knowledge in stages. Track your progress in [progress.md](./p
 
 ## 7. Tools We Will Use
 
-| Tool | Purpose | Difficulty |
-|------|---------|-----------|
-| **Python** | Programming language | Beginner |
-| **Anthropic SDK** | Talk to Claude (LLM) | Beginner |
-| **OpenAI SDK** | Alternative LLM access | Beginner |
-| **ChromaDB** | Vector database for RAG | Intermediate |
-| **LangChain** | Workflow & agent framework | Intermediate |
-| **LlamaIndex** | RAG framework | Intermediate |
-| **FastAPI** | Build an API for your agent | Intermediate |
+| Tool | Purpose | Used in |
+|------|---------|---------|
+| **Python** | Programming language | Everywhere |
+| **Google Gemini** (`google-genai`) | Cloud LLM and text embeddings | Stages 1–3, handbook search in 6 |
+| **Ollama** (`llama3.2:3b`) | Free local LLM, no rate limits | Stages 4–6 |
+| **ChromaDB** | Vector database for RAG | Stage 3, 6 |
+| **DuckDuckGo** (`ddgs`) | Free web search tool | Stage 4, 6 |
+| **Pydantic** | Structured JSON output | Stages 5–6 |
+| **LangChain** | Workflow framework | Stage 5 |
+| **FastAPI** + Uvicorn | Web API for the agent | Stage 6 |
 
 ---
 
 ## Getting Started
 
-Before writing any code, make sure you have:
-
-1. **Python installed** (version 3.10 or higher)
-   ```
-   python --version
-   ```
-
-2. **pip installed** (Python package manager)
-   ```
-   pip --version
-   ```
-
-3. **An API key** from Anthropic (claude.ai) or OpenAI
-
-We will set up everything together, step by step.
-Check [progress.md](./progress.md) to see where we are and what's next.
+See [Quick Start](#quick-start) at the top of this page to install and run everything.
+Check [progress.md](./progress.md) for notes on every lesson.
 
 ---
 
