@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nimbus HR Agent</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #6b7280;
+    --border: #e3e6eb; --user: #2f6fed; --user-text: #ffffff; --agent: #eef1f5;
+    --ok: #1f9d55; --warn-bg: #fff7e6; --warn-border: #f0b429; --danger: #d64545;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111418; --panel: #191d23; --text: #e6e9ee; --muted: #9aa3af;
+      --border: #2a3039; --user: #3b7cf5; --user-text: #ffffff; --agent: #232933;
+      --ok: #34c178; --warn-bg: #2b2414; --warn-border: #c99a2e; --danger: #ef6b6b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    height: 100vh; display: flex; justify-content: center;
+  }
+  .app {
+    width: 100%; max-width: 760px; height: 100%; display: flex; flex-direction: column;
+    background: var(--panel); border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+  }
+  header {
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  header h1 { font-size: 17px; margin: 0; }
+  .status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--danger); }
+  #messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 85%; padding: 10px 14px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.user { align-self: flex-end; background: var(--user); color: var(--user-text); border-bottom-right-radius: 4px; }
+  .msg.agent { align-self: flex-start; background: var(--agent); border-bottom-left-radius: 4px; }
+  .msg.error { align-self: flex-start; color: var(--danger); background: transparent; border: 1px solid var(--danger); }
+  .msg.thinking { color: var(--muted); font-style: italic; }
+  .action {
+    align-self: flex-start; max-width: 85%; padding: 12px 14px; border-radius: 12px;
+    background: var(--warn-bg); border: 1px solid var(--warn-border);
+  }
+  .action .title { font-weight: 600; margin-bottom: 4px; }
+  .action .details { font-family: ui-monospace, Consolas, monospace; font-size: 13px; margin-bottom: 10px; }
+  .action .buttons { display: flex; gap: 8px; }
+  .action .result { font-size: 14px; margin-top: 6px; }
+  button {
+    font: inherit; border-radius: 8px; padding: 8px 14px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  }
+  button.approve { background: var(--ok); color: #fff; border-color: var(--ok); }
+  button.reject { color: var(--danger); border-color: var(--danger); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .hints { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 10px; }
+  .hints button { font-size: 13px; padding: 6px 10px; border-radius: 999px; color: var(--muted); }
+  form { display: flex; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--border); }
+  input {
+    flex: 1; min-width: 0; font: inherit; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  }
+  form button { background: var(--user); color: #fff; border-color: var(--user); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Nimbus HR Agent</h1>
+    <div class="status"><span class="dot" id="dot"></span><span id="status">connecting…</span></div>
+  </header>
+
+  <div id="messages">
+    <div class="msg agent">Hi! I can answer HR policy questions, check and book vacation days,
+search the web, do maths and manage files. Bookings always need your approval.</div>
+  </div>
+
+  <div class="hints" id="hints">
+    <button type="button">How many vacation days does Aisha have left?</button>
+    <button type="button">What is the home office budget?</button>
+    <button type="button">Book 2 days off for Marco starting 2027-02-01</button>
+  </div>
+
+  <form id="form">
+    <input id="input" placeholder="Ask something…" autocomplete="off" maxlength="1000">
+    <button id="send">Send</button>
+  </form>
+</div>
+
+<script>
+// The API runs on the same server that serves this page, so relative URLs work.
+const messages = document.getElementById("messages");
+const form = document.getElementById("form");
+const input = document.getElementById("input");
+const send = document.getElementById("send");
+
+// ⚠️ SECURITY: every piece of text from the agent goes in with textContent,
+// NEVER innerHTML. LLM output is untrusted: if it contained "<script>…",
+// innerHTML would run it in your browser (an XSS attack). textContent just shows it.
+function addMessage(text, kind) {
+  const div = document.createElement("div");
+  div.className = "msg " + kind;
+  div.textContent = text;
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
+  return div;
+}
+
+function addPendingAction(action) {
+  const card = document.createElement("div");
+  card.className = "action";
+
+  const title = document.createElement("div");
+  title.className = "title";
+  title.textContent = "⏳ Needs your approval";
+
+  const details = document.createElement("div");
+  details.className = "details";
+  details.textContent = action.tool + "(" +
+    Object.entries(action.args).map(([k, v]) => k + "=" + JSON.stringify(v)).join(", ") + ")";
+
+  const buttons = document.createElement("div");
+  buttons.className = "buttons";
+  const approve = document.createElement("button");
+  approve.className = "approve"; approve.textContent = "Approve";
+  const reject = document.createElement("button");
+  reject.className = "reject"; reject.textContent = "Reject";
+  buttons.append(approve, reject);
+
+  const result = document.createElement("div");
+  result.className = "result";
+
+  async function decide(yes) {
+    approve.disabled = reject.disabled = true;
+    try {
+      const data = await postJSON("/actions/" + encodeURIComponent(action.id) + "/confirm", { approve: yes });
+      if (data.status === "rejected") {
+        result.textContent = "❌ Rejected. Nothing was changed.";
+      } else if (data.result && data.result.error) {
+        result.textContent = "⚠️ " + data.result.error;
+      } else {
+        const r = data.result;
+        result.textContent = "✅ Done: " + r.days + " day(s) for " + r.employee +
+          " from " + r.start_date + ". " + r.remaining + " day(s) left.";
+      }
+    } catch (err) {
+      result.textContent = "⚠️ " + err.message;
+    }
+    buttons.remove();
+  }
+  approve.onclick = () => decide(true);
+  reject.onclick = () => decide(false);
+
+  card.append(title, details, buttons, result);
+  messages.appendChild(card);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+async function postJSON(url, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || ("HTTP " + res.status));
+  return data;
+}
+
+async function ask(question) {
+  addMessage(question, "user");
+  input.value = "";
+  input.disabled = send.disabled = true;
+  const thinking = addMessage("Thinking… (a local model can take 10-30 seconds)", "agent thinking");
+  try {
+    const data = await postJSON("/ask", { question });
+    thinking.remove();
+    addMessage(data.answer, "agent");
+    data.pending_actions.forEach(addPendingAction);
+  } catch (err) {
+    thinking.remove();
+    addMessage("Something went wrong: " + err.message, "error");
+  }
+  input.disabled = send.disabled = false;
+  input.focus();
+}
+
+form.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const q = input.value.trim();
+  if (q) ask(q);
+});
+
+document.querySelectorAll("#hints button").forEach((b) => {
+  b.onclick = () => { if (!send.disabled) ask(b.textContent); };
+});
+
+// Show whether the server is reachable, and which model it uses
+fetch("/health")
+  .then((r) => r.json())
+  .then((h) => {
+    document.getElementById("dot").className = "dot ok";
+    document.getElementById("status").textContent = "online · " + h.model;
+  })
+  .catch(() => {
+    document.getElementById("dot").className = "dot bad";
+    document.getElementById("status").textContent = "offline";
+  });
+</script>
+</body>
+</html>

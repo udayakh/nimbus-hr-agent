@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip --version)",
+      "Bash(py --version)",
+      "Bash(winget --version)",
+      "Bash(winget install *)",
+      "Bash(/c/Users/HP/AppData/Local/Programs/Python/Python312/python.exe --version)",
+      "Bash(/c/Users/HP/AppData/Local/Programs/Python/Python312/python.exe -m pip --version)"
+    ]
+  }
+}

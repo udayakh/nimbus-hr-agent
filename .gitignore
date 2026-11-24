@@ -1,0 +1,7 @@
+.env
+venv/
+__pycache__/
+*.pyc
+chroma_db/
+stage4/workspace/
+stage6/long_term_memory.json
